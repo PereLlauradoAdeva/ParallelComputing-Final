@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+.venv/
+
+# Dataset - Ignore full dataset, keep sample
+archive/
+archive2/
+*.zip
+!data_sample/
+
+# Results - Keep CSVs, maybe ignore large output images if needed
+# Keeping outputs for now as requested "arxius de sortida"
+# But typically we ignore generated images. Let's keep them if small, or ignore if huge.
+# User asked "on hi hagi el codi, els arxius de sortida".
+# I will NOT ignore output folders, but I will ignore intermediate large files if any.
+
+# IDE
+.vscode/
+.idea/
