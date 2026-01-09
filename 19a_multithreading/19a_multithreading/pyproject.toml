@@ -1,6 +1,0 @@
-[project]
-name = "19a-multithreading"
-version = "0.1.0"
-description = "Sample programs to show multithreading in a No-GIL setup"
-requires-python = "==3.14.*"
-dependencies = []

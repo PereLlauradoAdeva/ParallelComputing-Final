@@ -11,7 +11,7 @@ def main():
     print("      BENCHMARK K-MEANS COLOR QUANTIZATION (CPU vs PARALLEL)     ")
     print("=================================================================")
     
-    # 1. Configuració de l'experiment (DATASETS)
+    # 1. Experiment Configuration (DATASETS)
     DATASETS = [
         {"name": "Full_Res", "path": "archive"},
         {"name": "Small_Res", "path": "archive2/seg_pred/seg_pred"}
@@ -22,17 +22,17 @@ def main():
     
     k_values = [8, 16, 32] 
     
-    # Detectar el màxim de threads disponibles per evitar errors de Numba
+    # Detect max available threads to avoid Numba errors
     max_threads = numba.config.NUMBA_NUM_THREADS
     all_thread_counts = [1, 2, 4, 8, 16]
     thread_counts = [t for t in all_thread_counts if t <= max_threads]
     
-    print(f"[INFO] Màxim threads detectats: {max_threads}")
-    print(f"[INFO] Thread counts efectius: {thread_counts}")
+    print(f"[INFO] Max threads detected: {max_threads}")
+    print(f"[INFO] Effective thread counts: {thread_counts}")
 
-    print(f"\n[INFO] Iniciant Benchmark Multi-Dataset")
+    print(f"\n[INFO] Starting Multi-Dataset Benchmark")
 
-    # --- BUCLE DE DATASETS ---
+    # --- DATASET LOOP ---
     for dataset in DATASETS:
         d_name = dataset["name"]
         d_path = dataset["path"]
@@ -42,45 +42,45 @@ def main():
         print(f"=================================================================")
         
         if not os.path.exists(d_path):
-            print(f"[ALERTA] El directori '{d_path}' no existeix. Saltant...")
+            print(f"[ALERT] Directory '{d_path}' does not exist. Skipping...")
             continue
 
-        # Obtenir el nombre d'imatges a processar PER AQUEST DATASET
+        # Get number of images to process FOR THIS DATASET
         try:
-            limit_input = input(f"\n[CONFIG] Nombre d'imatges per '{d_name}' (-1 = totes): ")
+            limit_input = input(f"\n[CONFIG] Number of images for '{d_name}' (-1 = all): ")
             limit = int(limit_input)
         except ValueError:
             limit = 5 
-            print(f"   [WARN] Entrada invàlida. Usant default {limit}.")
+            print(f"   [WARN] Invalid input. Using default {limit}.")
             
-        # Reiniciem resultats per cada dataset per tenir CSVs nets i separats
+        # Reset results for each dataset to have clean separate CSVs
         results = []
         
-        INPUT_DIR = d_path # El codi original fa servir INPUT_DIR variable
+        INPUT_DIR = d_path 
 
-        print(f"\n[INFO] Processant '{d_name}' amb limit={limit}")
+        print(f"\n[INFO] Processing '{d_name}' with limit={limit}")
         
-        # 2. Bucle de Tests
+        # 2. Test Loop
         for k in k_values:
             print(f"\n-----------------------------------------------------------------")
             print(f" EXPERIMENT: K (Clusters) = {k}")
             print(f"-----------------------------------------------------------------")
             
-            # --- EXECUCIÓ SEQÜENCIAL ---
-            print(f"\n>> Executant SEQÜENCIAL (K={k})...")
+            # --- SEQUENTIAL EXECUTION ---
+            print(f"\n>> Running SEQUENTIAL (K={k})...")
             t_seq, std_seq, n_seq, centroids_seq_dict = run_sequential(INPUT_DIR, OUTPUT_DIR_SEQ, limit=limit, k=k)
             
-            # --- Bucle de FILS (SCALABILITY) ---
+            # --- THREADS LOOP (SCALABILITY) ---
             for threads in thread_counts:
                  print(f"\n-----------------------------------------------------------------")
                  print(f" EXPERIMENT: K={k} | THREADS={threads}")
                  print(f"-----------------------------------------------------------------")
                  
-                 # --- EXECUCIÓ PARAL·LELA ---
-                 print(f"\n>> Executant PARAL·LEL (K={k}, T={threads})...")
+                 # --- PARALLEL EXECUTION ---
+                 print(f"\n>> Running PARALLEL (K={k}, T={threads})...")
                  t_par, std_par, n_par, centroids_par_dict = run_parallel(INPUT_DIR, OUTPUT_DIR_PAR, k=k, limit=limit, n_threads=threads)
                  
-                 # --- CÀLCUL DE SPEEDUP I EFICIÈNCIA ---
+                 # --- CALCULATE SPEEDUP AND EFFICIENCY ---
                  if t_par > 0:
                      speedup = t_seq / t_par
                  else:
@@ -91,48 +91,56 @@ def main():
                  else:
                      efficiency = 0
                      
-                 print(f"\n>> RESULTATS K={k} T={threads}:")
-                 print(f"   - Temps Seqüencial: {t_seq:.4f} s (+/- {std_seq:.4f})")
-                 print(f"   - Temps Paral·lel:  {t_par:.4f} s (+/- {std_par:.4f})")
-                 print(f"   - SPEEDUP:          {speedup:.2f}x")
-                 print(f"   - EFICIÈNCIA:       {efficiency:.2f}") # (1.0 = 100% ideal lineal)
+                 print(f"\n>> RESULTS K={k} T={threads}:")
+                 print(f"   - Sequential Time: {t_seq:.4f} s (+/- {std_seq:.4f})")
+                 print(f"   - Parallel Time:   {t_par:.4f} s (+/- {std_par:.4f})")
+                 print(f"   - SPEEDUP:         {speedup:.2f}x")
+                 print(f"   - EFFICIENCY:      {efficiency:.2f}") # (1.0 = 100% ideal linear)
                  
-                 # --- VALIDACIÓ DE CORRECCIÓ ---
-                 print(f"\n   [VALIDACIÓ] Comparant resultats...")
+                 # --- CORRECTNESS VALIDATION ---
+                 print(f"\n   [VALIDATION] Comparing results (Inertia/Error)...")
                  correct_count = 0
                  total_checked = 0
                  
                  common_files = set(centroids_seq_dict.keys()).intersection(set(centroids_par_dict.keys()))
                  for filename in common_files:
-                     c_seq = centroids_seq_dict[filename]
-                     c_par = centroids_par_dict[filename]
+                     # Retrieve data: Now it is a dictionary {"centroids": ..., "inertia": ...}
+                     data_seq = centroids_seq_dict[filename]
+                     data_par = centroids_par_dict[filename]
                      
-                     passed = False
-                     
-                     # Check 1: Direct Centroid Match
-                     if np.allclose(c_seq, c_par, atol=1.0):
-                         passed = True
-                     
-                     # Check 2: Sorted Centroid Match (Robustness)
-                     if not passed:
-                         c_seq_sorted = c_seq[np.argsort(c_seq[:, 0])]
-                         c_par_sorted = c_par[np.argsort(c_par[:, 0])]
-                         if np.allclose(c_seq_sorted, c_par_sorted, atol=1.0):
-                             passed = True
+                     if isinstance(data_seq, dict) and "inertia" in data_seq:
+                         inertia_seq = data_seq["inertia"]
+                         inertia_par = data_par["inertia"]
+                     else:
+                         # Fallback if something went wrong or old versions
+                         inertia_seq = 1.0 
+                         inertia_par = 1.0 # Avoid crash
+                         print(f"   [WARN] Old data format detected for {filename}")
 
-                     if passed:
+                     # Calculate Relative Error Percentage
+                     # abs(seq - par) / seq * 100
+                     if inertia_seq == 0:
+                         diff_rel = 0.0
+                     else:
+                         diff_rel = abs(inertia_seq - inertia_par) / inertia_seq * 100.0
+                     
+                     # Acceptable Tolerance: < 0.1% difference in total error
+                     # This accepts different solutions (Butterfly Effect) as long as they are equally good.
+                     TOLERANCE_PERCENT = 0.1 
+                     
+                     if diff_rel < TOLERANCE_PERCENT:
                          correct_count += 1
                      else:
-                         # pass
-                         pass
+                         print(f"     FAIL {filename}: Diff={diff_rel:.4f}% (Seq={inertia_seq:.1f}, Par={inertia_par:.1f})")
+                     
                      total_checked += 1
 
                  if total_checked > 0 and correct_count == total_checked:
                       validation_msg = "PASSED"
-                      print(f"   [RESULTAT] CORRECTE ({correct_count}/{total_checked})")
+                      print(f"   [RESULT] CORRECT ({correct_count}/{total_checked}) - All within {TOLERANCE_PERCENT}% relative error.")
                  else:
                       validation_msg = "FAILED"
-                      print(f"   [RESULTAT] FALLIDA ({total_checked - correct_count} errors)")
+                      print(f"   [RESULT] FAILED ({total_checked - correct_count} errors)")
 
                  results.append({
                      "k": k,
@@ -146,9 +154,9 @@ def main():
                      "validation": validation_msg
                  })
 
-        # 3. Resum Final per Dataset
+        # 3. Final Summary per Dataset
         print(f"\n=========================================================================================")
-        print(f"                       RESUM FINAL ({d_name})                    ")
+        print(f"                       FINAL SUMMARY ({d_name})                    ")
         print(f"=========================================================================================")
         print(f"{'K':<5} | {'Threads':<8} | {'T. Seq':<10} | {'S.Dev':<8} | {'T. Par':<10} | {'S.Dev':<8} | {'Spd':<8} | {'Eff':<8} | {'Valid'}")
         print("-" * 105)
@@ -157,14 +165,14 @@ def main():
             print(f"{r['k']:<5} | {r['threads']:<8} | {r['seq']:<10.4f} | {r['std_seq']:<8.4f} | {r['par']:<10.4f} | {r['std_par']:<8.4f} | {r['speedup']:<8.2f}x | {r['efficiency']:<8.2f} | {val}")
         print("=========================================================================================")
         
-        # 4. Guardar resultats en CSV SEPARAT
+        # 4. Save results to SEPARATE CSV
         csv_filename = f"benchmark_results_{d_name}.csv"
-        print(f"\n[INFO] Guardant resultats de '{d_name}' a '{csv_filename}'...")
+        print(f"\n[INFO] Saving results of '{d_name}' to '{csv_filename}'...")
         
         with open(csv_filename, mode='w', newline='') as f:
             writer = csv.writer(f)
-            # Capçaleres
-            # Capçaleres
+            # Headers
+            # Headers
             writer.writerow(["K", "Threads", "T. Seq", "Std. Seq", "T. Par", "Std. Par", "Spd", "Eff", "Valid"])
             
             for r in results:

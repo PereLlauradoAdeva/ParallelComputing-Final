@@ -6,30 +6,30 @@ import numba
 from numba import jit, prange
 
 # ------------------------------------------------------------------------------
-# NUCLI PARAL·LEL (La màgia de Numba)
+# PARALLEL KERNEL (Numba Magic)
 # ------------------------------------------------------------------------------
-# @jit: Compila la funció a codi màquina (molt ràpid)
-# nopython=True: No utilitzis objectes lents de Python
-# parallel=True: Activa el paral·lelisme automàtic (Multithreading sense GIL)
+# @jit: Compiles function to machine code (very fast)
+# nopython=True: Do not use slow Python objects
+# parallel=True: Activates automatic parallelism (Multithreading without GIL)
 # ------------------------------------------------------------------------------
 @jit(nopython=True, parallel=True)
 def kmeans_assign_labels(pixels, centroids):
     """
-    Pas 1 (Assignació): Calcula el clúster més proper per a cada píxel.
-    S'executa en paral·lel a tots els nuclis de la CPU.
+    Step 1 (Assignment): Calculate the nearest cluster for each pixel.
+    Runs in parallel on all CPU cores.
     """
     n_pixels = pixels.shape[0]
     n_centroids = centroids.shape[0]
     labels = np.empty(n_pixels, dtype=np.int32)
     
-    # [Documentació False Sharing]
-    # L'ús de `prange` reparteix els índexs `i` entre els fils.
-    # Com que `labels` és un array contigu i cada fil escriu en un rang contigu d'índexs
-    # (chunking automàtic de Numba), el "False Sharing" només es podria produir 
-    # a les fronteres dels chunks (mínim impacte).
-    # Per tant, escriure a `labels[i]` és segur i eficient.
+    # [False Sharing Documentation]
+    # Using `prange` distributes indices `i` among threads.
+    # Since `labels` is a contiguous array and each thread writes to a contiguous range
+    # (automatic chunking by Numba), "False Sharing" could only occur
+    # at chunk boundaries (minimal impact).
+    # Therefore, writing to `labels[i]` is safe and efficient.
     
-    # prange (Parallel Range): Numba reparteix aquest bucle entre els fils
+    # prange (Parallel Range): Numba splits this loop among threads
     for i in prange(n_pixels):
         r = pixels[i, 0]
         g = pixels[i, 1]
@@ -38,13 +38,13 @@ def kmeans_assign_labels(pixels, centroids):
         min_dist = 1e30
         best_k = -1
         
-        # Comprovem la distància a cada centroide
+        # Check distance to each centroid
         for k in range(n_centroids):
             c_r = centroids[k, 0]
             c_g = centroids[k, 1]
             c_b = centroids[k, 2]
             
-            # Distància euclidiana al quadrat
+            # Squared Euclidean distance
             dist = (r - c_r)**2 + (g - c_g)**2 + (b - c_b)**2
             
             if dist < min_dist:
@@ -58,22 +58,22 @@ def kmeans_assign_labels(pixels, centroids):
 @jit(nopython=True, parallel=True)
 def compute_new_centroids(pixels, labels, k, n_threads):
     """
-    Pas 2 (Actualització): Recalcula la posició dels centres en PARAL·LEL.
-    Utilitza arrays privats per fil per evitar condicions de carrera i false sharing.
+    Step 2 (Update): Recalculate centroid positions in PARALLEL.
+    Uses private arrays per thread to avoid race conditions and false sharing.
     """
     n_pixels = pixels.shape[0]
     
-    # Calculem el padding per assegurar que cada fila ocupi 64 bytes (8 floats)
-    # Si k=8 ja ocupa 64 bytes. Si k < 8, forcem que la fila sigui de 8.
+    # Calculate padding to ensure each row occupies 64 bytes (8 floats)
+    # If k=8 it already takes 64 bytes. If k < 8, force row to be 8.
     pad_k = max(k, 8) 
     
-    # Estructures privades amb padding (float64 per ocupar 8 bytes cadascun)
+    # Private structures with padding (float64 so each takes 8 bytes)
     priv_sum_r = np.zeros((n_threads, pad_k), dtype=np.float64)
     priv_sum_g = np.zeros((n_threads, pad_k), dtype=np.float64)
     priv_sum_b = np.zeros((n_threads, pad_k), dtype=np.float64)
     priv_counts = np.zeros((n_threads, pad_k), dtype=np.int32)
     
-    # Repartim la feina manualment per utilitzar l'índex de fil (t)
+    # Check work manually to use thread index (t)
     chunk_size = (n_pixels + n_threads - 1) // n_threads
     
     for t in prange(n_threads):
@@ -87,11 +87,11 @@ def compute_new_centroids(pixels, labels, k, n_threads):
                 priv_sum_b[t, idx] += pixels[i, 2]
                 priv_counts[t, idx] += 1
                 
-    # Reducció final (suma dels resultats parcials de cada fil)
+    # Final reduction (sum partial results from each thread)
     new_centroids = np.zeros((k, 3), dtype=np.float32)
     
     for j in range(k):
-        # Sumar aportacions de tots els fils
+        # Sum contributions from all threads
         total_r = np.sum(priv_sum_r[:, j])
         total_g = np.sum(priv_sum_g[:, j])
         total_b = np.sum(priv_sum_b[:, j])
@@ -106,7 +106,7 @@ def compute_new_centroids(pixels, labels, k, n_threads):
 
 @jit(nopython=True, parallel=True)
 def reconstruct_image(pixels, centroids, labels):
-    """Reconstrueix la imatge final en paral·lel."""
+    """Reconstructs the final image in parallel."""
     n_pixels = pixels.shape[0]
     output = np.empty_like(pixels)
     
@@ -119,21 +119,21 @@ def reconstruct_image(pixels, centroids, labels):
     return output
 
 # ------------------------------------------------------------------------------
-# PROGRAMA PRINCIPAL
+# MAIN PROGRAM
 # ------------------------------------------------------------------------------
 import os
 
 def run_kmeans_parallel_cpu_folder(input_dir, output_dir, k=16, max_iters=20, tol=1e-4, limit=-1, n_threads=None):
-    print(f"--- Iniciant K-Means amb Numba (CPU Multicore) ---")
+    print(f"--- Starting K-Means with Numba (Multicore CPU) ---")
     
     if n_threads is not None:
         numba.set_num_threads(n_threads)
-        print(f"   [CONFIG] Forçant {n_threads} fils.")
+        print(f"   [CONFIG] Forcing {n_threads} threads.")
     else:
-        # Si no s'especifica, agafar el defecte (tots els cores)
+        # If not specified, use default (all cores)
         n_threads = numba.get_num_threads()
-        print(f"   [CONFIG] Utilitzant {n_threads} fils (Defecte/Env).")
-        print(f"Error: El directori '{input_dir}' no existeix.")
+        print(f"   [CONFIG] Using {n_threads} threads (Default/Env).")
+        print(f"Error: Directory '{input_dir}' does not exist.")
         return
 
     if not os.path.exists(output_dir):
@@ -142,13 +142,13 @@ def run_kmeans_parallel_cpu_folder(input_dir, output_dir, k=16, max_iters=20, to
     image_files = [f for f in os.listdir(input_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))]
     
     if not image_files:
-        print("No s'han trobat imatges.")
+        print("No images found.")
         return
         
     if limit != -1:
         image_files = image_files[:limit]
         
-    print(f"Processant {len(image_files)} imatges en PARAL·LEL (CPU)...")
+    print(f"Processing {len(image_files)} images in PARALLEL (CPU)...")
     
     csv_file = "parallel_results.csv"
     file_exists = os.path.isfile(csv_file)
@@ -158,31 +158,31 @@ def run_kmeans_parallel_cpu_folder(input_dir, output_dir, k=16, max_iters=20, to
         if not file_exists:
             writer.writerow(["Filename", "MeanTime_s", "StdDev_s", "K", "MaxIters", "Resolution", "Pixels"])
 
-    # Compilació JIT inicial (Warm-up complet)
-    print("Pre-compilant funcions Numba (Warm-up)...")
+    # Initial JIT Compilation (Warm-up complete)
+    print("Pre-compiling Numba functions (Warm-up)...")
     dummy_pixels = np.random.rand(100, 3).astype(np.float32)
     dummy_centroids = np.random.rand(k, 3).astype(np.float32)
     dummy_labels = np.zeros(100, dtype=np.int32)
     
-    # Executar totes les funcions JIT per garantir compilació
+    # Run all JIT functions to guarantee compilation
     _ = kmeans_assign_labels(dummy_pixels, dummy_centroids)
-    # Passem un n_threads fictici (per exemple 1 o 4) pel warm-up o el real
+    # Pass a dummy n_threads (e.g., 1 or 4) for warm-up or the real one
     _ = compute_new_centroids(dummy_pixels, dummy_labels, k, n_threads if n_threads else 4)
     _ = reconstruct_image(dummy_pixels, dummy_centroids, dummy_labels)
-    print("Warm-up complet.")
+    print("Warm-up complete.")
     
     accumulated_processing_time = 0.0
     accumulated_variance = 0.0
     processed_count = 0
     centroids_dict = {}
 
-    # Determinar nombre de fils Numba actius
-    # Ja tenim n_threads definit a l'inici de la funció
+    # Determine number of active Numba threads
+    # We already have n_threads defined at function start
 
     
     for filename in image_files:
         img_path = os.path.join(input_dir, filename)
-        # Modifiquem el nom per incloure K i Threads i evitar sobreescriptura
+        # Modify name to include K and Threads to avoid overwriting
         name, ext = os.path.splitext(filename)
         if n_threads is not None:
              output_filename = f"{name}_k{k}_t{n_threads}{ext}"
@@ -191,10 +191,10 @@ def run_kmeans_parallel_cpu_folder(input_dir, output_dir, k=16, max_iters=20, to
              
         output_path = os.path.join(output_dir, output_filename)
         
-        # 1. Carregar imatge (I/O fora del cronòmetre)
+        # 1. Load Image (I/O outside timer)
         img = cv2.imread(img_path)
         if img is None:
-            print(f"Error llegint {filename}")
+            print(f"Error reading {filename}")
             continue
             
         pixels = img.reshape(-1, 3).astype(np.float32)
@@ -203,49 +203,58 @@ def run_kmeans_parallel_cpu_folder(input_dir, output_dir, k=16, max_iters=20, to
         times = []
         final_image = None
         
-        # Iteracions per estabilitat estadística
+        # Iterations for statistical stability
         n_iterations = 5
         
         for idx_iter in range(n_iterations):
-            # Inicialització (part de l'algorisme o setup)
-            # Normalment la tria de centroides és part de K-Means, així que la cronometrem o 
-            # utilitzem la mateixa 'seed' per consistència. La deixarem dins per ser justos amb sequencial.
-            # NO: Si volem veure estabilitat de la PARAL·LELERITZACIÓ, potser millor fixar la seed sempre igual.
-            # Utilitzem 'perf_counter' per alta precisió.
+            # Initialization (part of the algorithm or setup)
+            # Usually centroid selection is part of K-Means.
+            # We fix seed for consistency.
+            # Using 'perf_counter' for high precision.
             
             start_run = time.perf_counter()
             
             np.random.seed(42)
             centroids = pixels[np.random.choice(pixels.shape[0], k, replace=False)]
             
-            # 2. Bucle Principal K-Means
+            # 2. Main K-Means Loop
             labels = None
             for i in range(max_iters):
-                # --- PAS PARAL·LEL (Assignació) ---
+                # --- PARALLEL STEP (Assignment) ---
                 labels = kmeans_assign_labels(pixels, centroids)
                 
-                # --- PAS ACTUALITZACIÓ (ARA PARAL·LEL) ---
+                # --- UPDATE STEP (NOW PARALLEL) ---
                 new_centroids = compute_new_centroids(pixels, labels, k, n_threads)
                 
-                # Convergència
+                # Convergence
                 shift = np.linalg.norm(new_centroids - centroids)
                 centroids = new_centroids
                 
                 if shift < tol:
                     break
                     
-            # 3. Generar Resultat (Reconstrucció també és paral·lela i part del procés)
+            # 3. Generate Result (Reconstruction is also parallel and part of the process)
             final_pixels = reconstruct_image(pixels, centroids, labels)
             
             end_run = time.perf_counter()
             times.append(end_run - start_run)
             
-            # Formatem la imatge només al final per guardar-la
+            # Format image only at the end to save it
             if idx_iter == n_iterations - 1:
                 final_image = final_pixels.reshape(h, w, c).astype(np.uint8)
-                centroids_dict[filename] = centroids
+                
+                # Calculate INERTIA (parallel/vectorized in numpy)
+                # final_pixels and centroids[labels] should be aligned
+                # But 'labels' is 1D and 'centroids' has 3 coords.
+                # Reconstruct ideal pixels (color of their center)
+                # This is already done by 'reconstruct_image' -> final_pixels in float32
+                
+                diff = pixels - final_pixels # (N, 3)
+                inertia = np.sum(diff**2)
+                
+                centroids_dict[filename] = {"centroids": centroids, "inertia": inertia}
 
-        # Càlculs estadístics
+        # Statistical calculations
         mean_time = np.mean(times)
         std_time = np.std(times)
         accumulated_processing_time += mean_time
@@ -253,20 +262,20 @@ def run_kmeans_parallel_cpu_folder(input_dir, output_dir, k=16, max_iters=20, to
 
         print(f"  {filename}: {mean_time:.4f}s (+/- {std_time:.4f})")
         
-        # Guardar al CSV
+        # Save to CSV
         with open(csv_file, mode='a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([filename, f"{mean_time:.5f}", f"{std_time:.5f}", k, max_iters, f"{w}x{h}", h*w])
 
-        # Guardar imatge (I/O)
+        # Save image (I/O)
         cv2.imwrite(output_path, final_image)
         processed_count += 1
             
-    print(f"\n--- Resum Paral·lel (CPU) ---")
-    print(f"Imatges processades: {processed_count}")
-    print(f"Temps de PROCÉS acumulat (suma de mitjanes): {accumulated_processing_time:.4f} segons")
+    print(f"\n--- Parallel Summary (CPU) ---")
+    print(f"Processed images: {processed_count}")
+    print(f"Accumulated PROCESS time: {accumulated_processing_time:.4f} seconds")
     if processed_count > 0:
-        print(f"Temps mitjà de procés per imatge: {accumulated_processing_time/processed_count:.4f} segons")
+        print(f"Average process time per image: {accumulated_processing_time/processed_count:.4f} seconds")
         
     return accumulated_processing_time, np.sqrt(accumulated_variance), processed_count, centroids_dict
 
