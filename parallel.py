@@ -182,7 +182,14 @@ def run_kmeans_parallel_cpu_folder(input_dir, output_dir, k=16, max_iters=20, to
     
     for filename in image_files:
         img_path = os.path.join(input_dir, filename)
-        output_path = os.path.join(output_dir, filename)
+        # Modifiquem el nom per incloure K i Threads i evitar sobreescriptura
+        name, ext = os.path.splitext(filename)
+        if n_threads is not None:
+             output_filename = f"{name}_k{k}_t{n_threads}{ext}"
+        else:
+             output_filename = f"{name}_k{k}{ext}"
+             
+        output_path = os.path.join(output_dir, output_filename)
         
         # 1. Carregar imatge (I/O fora del cronòmetre)
         img = cv2.imread(img_path)

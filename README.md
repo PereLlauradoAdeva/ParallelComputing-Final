@@ -42,10 +42,30 @@ This project implements a parallelized K-means clustering algorithm for image co
 | `max_iters` | Maximum K-means iterations | `20` (Parallel), `10` (Sequential) |
 | `tol` | Convergence tolerance | `1e-4` |
 
+## 🖥️ System Configuration
+
+To ensure reproducibility and accurate benchmarking, it is recommended to document the hardware specifications:
+
+| Component | Specification |
+| :--- | :--- |
+| **CPU** | Intel(R) Core(TM) i7-8550U @ 1.80GHz |
+| **Cores/Threads** | 4 Physical Cores / 8 Logical Processors |
+| **RAM** | 16.0 GB DDR4 |
+| **OS** | Windows 10/11 |
+| **Python Version** | 3.12.10 |
+| **Compiler / JIT** | Numba 0.63.1 (LLVM 14 via llvmlite 0.46.0) |
+
+> **⚠️ Benchmark Best Practices:** 
+> * **High-Resolution Timing:** This project uses `time.perf_counter()` to measure execution time with maximum precision, excluding I/O operations.
+> * **Warm-up:** A warm-up phase is included to eliminate JIT compilation overhead (Numba) and disk caching effects.
+> * **Environment:** Close unnecessary background processes and disable CPU frequency scaling if possible to ensure consistent results.
+
 ## 📚 Dataset Citations
 The dataset utilized in this project is the **Landscape Pictures** collection, available on Kaggle. Curated by Arnaud58, this dataset features High-Definition images of various landscapes. The rich color diversity and high resolution of these images make them an ideal benchmark for evaluating the efficiency and accuracy of color quantization algorithms.
 
-**Source:** [Kaggle - Landscape Pictures](https://www.kaggle.com/datasets/arnaud58/landscape-pictures?resource=download)
+**Source:** 
+*Dataset 1 (Big images):*[Kaggle - Landscape Pictures](https://www.kaggle.com/datasets/arnaud58/landscape-pictures?resource=download)
+*Dataset 2 (Small images):*[Kaggle - Intel Image Classification](https://www.kaggle.com/datasets/puneet6060/intel-image-classification?resource=download)
 
 ## 👤 Author
 **Pere Llauradó Adeva**
