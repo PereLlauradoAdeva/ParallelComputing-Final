@@ -13,7 +13,7 @@ This project implements a parallelized K-means clustering algorithm for image co
 ## 🚀 Build & Run Instructions
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.12.10+
 - Required libraries:
   ```bash
   pip install numpy opencv-python numba
