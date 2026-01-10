@@ -60,6 +60,10 @@ To ensure reproducibility and accurate benchmarking, it is recommended to docume
 > * **Warm-up:** A warm-up phase is included to eliminate JIT compilation overhead (Numba) and disk caching effects.
 > * **Environment:** Close unnecessary background processes and disable CPU frequency scaling if possible to ensure consistent results.
 
+### ⚠️ Note on Validation Failures
+
+If you see a `FAILED` status with a small difference (e.g., 0.4%), don't worry. This happens because parallel calculations sum numbers in a different order than sequential ones. Tiny rounding differences accumulate and can lead K-Means to a slightly different (but equally valid) solution. It's not a bug, just how floating-point math works.
+
 ## 📚 Dataset Citations
 The dataset utilized in this project is the **Landscape Pictures** collection, available on Kaggle. Curated by Arnaud58, this dataset features High-Definition images of various landscapes. The rich color diversity and high resolution of these images make them an ideal benchmark for evaluating the efficiency and accuracy of color quantization algorithms.
 
