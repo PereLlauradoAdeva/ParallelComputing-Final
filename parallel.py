@@ -6,11 +6,10 @@ import numba
 from numba import jit, prange
 
 # ------------------------------------------------------------------------------
-# PARALLEL KERNEL (Numba Magic)
-# ------------------------------------------------------------------------------
-# @jit: Compiles function to machine code (very fast)
-# nopython=True: Do not use slow Python objects
-# parallel=True: Activates automatic parallelism (Multithreading without GIL)
+# PARALLEL KERNEL (Numba)
+# @jit: Compiles to fast machine code.
+# nopython=True: Fast mode (no Python objects).
+# parallel=True: Runs on multiple CPU cores.
 # ------------------------------------------------------------------------------
 @jit(nopython=True, parallel=True)
 def kmeans_assign_labels(pixels, centroids):
@@ -22,12 +21,9 @@ def kmeans_assign_labels(pixels, centroids):
     n_centroids = centroids.shape[0]
     labels = np.empty(n_pixels, dtype=np.int32)
     
-    # [False Sharing Documentation]
-    # Using `prange` distributes indices `i` among threads.
-    # Since `labels` is a contiguous array and each thread writes to a contiguous range
-    # (automatic chunking by Numba), "False Sharing" could only occur
-    # at chunk boundaries (minimal impact).
-    # Therefore, writing to `labels[i]` is safe and efficient.
+    # [Performance Note]
+    # Numba splits the loop into chunks for each thread.
+    # Each thread writes to its own part of 'labels', so it is safe and fast.
     
     # prange (Parallel Range): Numba splits this loop among threads
     for i in prange(n_pixels):
@@ -58,16 +54,16 @@ def kmeans_assign_labels(pixels, centroids):
 @jit(nopython=True, parallel=True)
 def compute_new_centroids(pixels, labels, k, n_threads):
     """
-    Step 2 (Update): Recalculate centroid positions in PARALLEL.
-    Uses private arrays per thread to avoid race conditions and false sharing.
+    Step 2 (Update): Recalculate centroids using multiple threads.
+    Uses private arrays to prevent memory conflicts.
     """
     n_pixels = pixels.shape[0]
     
-    # Calculate padding to ensure each row occupies 64 bytes (8 floats)
-    # If k=8 it already takes 64 bytes. If k < 8, force row to be 8.
+    # Add padding to optimize memory access (Cache alignment).
+    # Ensures each thread writes to a separate memory block to avoid slowdowns.
     pad_k = max(k, 8) 
     
-    # Private structures with padding (float64 so each takes 8 bytes)
+    # Private arrays for each thread
     priv_sum_r = np.zeros((n_threads, pad_k), dtype=np.float64)
     priv_sum_g = np.zeros((n_threads, pad_k), dtype=np.float64)
     priv_sum_b = np.zeros((n_threads, pad_k), dtype=np.float64)
